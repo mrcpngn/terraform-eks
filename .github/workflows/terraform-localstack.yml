@@ -1,27 +1,31 @@
-name: Terraform CI
+name: Terraform CI/CD
 
 on:
   pull_request:
+    branches:
+      - main
+      - master
+
   push:
     branches:
+      - main
       - master
 
 jobs:
   terraform:
+
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        environment: [dev, staging, prod]
+        stack: [vpc]
 
     services:
       localstack:
         image: localstack/localstack
         ports:
           - 4566:4566
-        env:
-          DEBUG: 1
-
-    strategy:
-      matrix:
-        stack:
-          - environments/dev/vpc
 
     env:
       AWS_ACCESS_KEY_ID: test
@@ -29,7 +33,8 @@ jobs:
       AWS_DEFAULT_REGION: us-east-1
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -38,20 +43,29 @@ jobs:
         run: |
           pipx install terraform-local
 
-      - name: Wait for LocalStack
-        run: sleep 10
+      - name: Set working directory
+        id: dir
+        run: |
+          echo "DIR=environments/${{ matrix.environment }}/${{ matrix.stack }}" >> $GITHUB_OUTPUT
 
       - name: Terraform Init
         run: |
-          cd ${{ matrix.stack }}
+          cd ${{ steps.dir.outputs.DIR }}
           tflocal init
 
       - name: Terraform Validate
         run: |
-          cd ${{ matrix.stack }}
+          cd ${{ steps.dir.outputs.DIR }}
           terraform validate
 
-      - name: Terraform Plan
+      - name: Terraform Plan (PR)
+        if: github.event_name == 'pull_request'
         run: |
-          cd ${{ matrix.stack }}
-          tflocal plan
+          cd ${{ steps.dir.outputs.DIR }}
+          tflocal plan -no-color
+
+      - name: Terraform Apply (main)
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          cd ${{ steps.dir.outputs.DIR }}
+          tflocal apply -auto-approve
