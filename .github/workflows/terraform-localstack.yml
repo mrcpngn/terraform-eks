@@ -21,7 +21,7 @@ jobs:
     strategy:
       matrix:
         stack:
-          - environments/dev/networking
+          - environments/dev/vpc
 
     env:
       AWS_ACCESS_KEY_ID: test
