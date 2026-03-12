@@ -1,31 +1,33 @@
 name: Terraform CI/CD
 
 on:
-  pull_request:
-    branches:
-      - main
-      - master
-
   push:
     branches:
-      - main
-      - master
+      - '**'           # any branch
+  pull_request:
+    branches:
+      - dev
+      - staging
+      - prod
 
 jobs:
   terraform:
-
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        environment: [dev]
-        stack: [vpc]
+        environment:
+            - dev
+        stack:
+            - vpc
 
     services:
       localstack:
         image: localstack/localstack
         ports:
           - 4566:4566
+        env:
+          DEBUG: 1
 
     env:
       AWS_ACCESS_KEY_ID: test
@@ -33,39 +35,49 @@ jobs:
       AWS_DEFAULT_REGION: us-east-1
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Install tools
+      - name: Install Terraform Local
+        run: pipx install terraform-local
+
+      - name: Determine environment from branch
+        id: env
         run: |
-          pipx install terraform-local
+          BRANCH_NAME=${GITHUB_REF##*/}
+          if [[ "$BRANCH_NAME" == dev ]]; then
+            echo "TARGET_ENV=dev" >> $GITHUB_ENV
+          elif [[ "$BRANCH_NAME" == staging ]]; then
+            echo "TARGET_ENV=staging" >> $GITHUB_ENV
+          elif [[ "$BRANCH_NAME" == prod ]]; then
+            echo "TARGET_ENV=prod" >> $GITHUB_ENV
+          else
+            echo "TARGET_ENV=ci" >> $GITHUB_ENV   # Any other branch = CI only
 
       - name: Set working directory
-        id: dir
+        id: workdir
         run: |
-          echo "DIR=environments/${{ matrix.environment }}/${{ matrix.stack }}" >> $GITHUB_OUTPUT
+          echo "DIR=environments/${TARGET_ENV}/${{ matrix.stack }}" >> $GITHUB_OUTPUT
 
       - name: Terraform Init
         run: |
-          cd ${{ steps.dir.outputs.DIR }}
+          cd ${{ steps.workdir.outputs.DIR }}
           tflocal init
 
       - name: Terraform Validate
         run: |
-          cd ${{ steps.dir.outputs.DIR }}
+          cd ${{ steps.workdir.outputs.DIR }}
           terraform validate
 
-      - name: Terraform Plan (PR)
-        if: github.event_name == 'pull_request'
+      - name: Terraform Plan
         run: |
-          cd ${{ steps.dir.outputs.DIR }}
+          cd ${{ steps.workdir.outputs.DIR }}
           tflocal plan -no-color
 
-      - name: Terraform Apply (main)
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      - name: Terraform Apply
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/prod')
         run: |
-          cd ${{ steps.dir.outputs.DIR }}
+          cd ${{ steps.workdir.outputs.DIR }}
           tflocal apply -auto-approve
