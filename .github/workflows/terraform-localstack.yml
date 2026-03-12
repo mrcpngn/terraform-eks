@@ -55,6 +55,7 @@ jobs:
             echo "TARGET_ENV=prod" >> $GITHUB_ENV
           else
             echo "TARGET_ENV=ci" >> $GITHUB_ENV   # Any other branch = CI only
+          fi
 
       - name: Set working directory
         id: workdir
