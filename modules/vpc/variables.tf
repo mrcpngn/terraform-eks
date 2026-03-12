@@ -15,6 +15,6 @@ variable "enable_dns_support" {
 }
 
 variable "tags" {
-  type = map(string)
+  type    = map(string)
   default = {}
 }
