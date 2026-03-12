@@ -3,12 +3,10 @@ name: Terraform CI/CD
 on:
   push:
     branches:
-      - '**'           # any branch
+      - '**'  # any branch
   pull_request:
     branches:
       - dev
-      - staging
-      - prod
 
 jobs:
   terraform:
@@ -16,11 +14,7 @@ jobs:
 
     strategy:
       matrix:
-        environment:
-            - dev
-        stack:
-            - vpc
-            - subnet
+        stack: [vpc, subnet]
 
     services:
       localstack:
@@ -36,7 +30,8 @@ jobs:
       AWS_DEFAULT_REGION: us-east-1
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -44,41 +39,59 @@ jobs:
       - name: Install Terraform Local
         run: pipx install terraform-local
 
+      - name: Wait for LocalStack
+        run: sleep 10
+
       - name: Determine environment from branch
-        id: env
+        shell: bash
         run: |
           BRANCH_NAME=${GITHUB_REF##*/}
-          if [[ "$BRANCH_NAME" == dev ]] || [[ "$BRANCH_NAME" == feat/dev-* ]] || [[ "$BRANCH_NAME" == fix/dev-* ]]; then
+          echo "Branch detected: $BRANCH_NAME"
+
+          if [[ "$BRANCH_NAME" == "dev" ]] || [[ "$BRANCH_NAME" == feat/dev-* ]] || [[ "$BRANCH_NAME" == fix/dev-* ]]; then
             echo "TARGET_ENV=dev" >> $GITHUB_ENV
-          elif [[ "$BRANCH_NAME" == staging ]] || [[ "$BRANCH_NAME" == feat/staging-* ]] || [[ "$BRANCH_NAME" == fix/staging-* ]]; then
+          elif [[ "$BRANCH_NAME" == "staging" ]] || [[ "$BRANCH_NAME" == feat/staging-* ]] || [[ "$BRANCH_NAME" == fix/staging-* ]]; then
             echo "TARGET_ENV=staging" >> $GITHUB_ENV
-          elif [[ "$BRANCH_NAME" == prod ]] || [[ "$BRANCH_NAME" == feat/prod-* ]] || [[ "$BRANCH_NAME" == fix/prod-* ]]; then
+          elif [[ "$BRANCH_NAME" == "prod" ]] || [[ "$BRANCH_NAME" == feat/prod-* ]] || [[ "$BRANCH_NAME" == fix/prod-* ]]; then
             echo "TARGET_ENV=prod" >> $GITHUB_ENV
           else
-            echo "TARGET_ENV=ci" >> $GITHUB_ENV   # Any other branch = CI only
-          fi
+            echo "TARGET_ENV=skip" >> $GITHUB_ENV
+
+      - name: Skip if not an environment branch
+        if: env.TARGET_ENV == 'skip'
+        run: |
+          echo "Not an environment branch, skipping Terraform"
+          exit 0
+
       - name: Set working directory
+        if: env.TARGET_ENV != 'skip'
         id: workdir
         run: |
           echo "DIR=environments/${TARGET_ENV}/${{ matrix.stack }}" >> $GITHUB_OUTPUT
 
       - name: Terraform Init
+        if: env.TARGET_ENV != 'skip'
         run: |
           cd ${{ steps.workdir.outputs.DIR }}
           tflocal init
 
       - name: Terraform Validate
+        if: env.TARGET_ENV != 'skip'
         run: |
           cd ${{ steps.workdir.outputs.DIR }}
           terraform validate
 
       - name: Terraform Plan
+        if: env.TARGET_ENV != 'skip'
         run: |
           cd ${{ steps.workdir.outputs.DIR }}
           tflocal plan -no-color
 
       - name: Terraform Apply
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/prod')
+        if: |
+          env.TARGET_ENV != 'skip' && 
+          github.event_name == 'push' &&
+          (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/prod')
         run: |
           cd ${{ steps.workdir.outputs.DIR }}
           tflocal apply -auto-approve
