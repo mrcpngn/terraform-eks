@@ -48,11 +48,11 @@ jobs:
         id: env
         run: |
           BRANCH_NAME=${GITHUB_REF##*/}
-          if [[ "$BRANCH_NAME" == dev || "$BRANCH_NAME" == feat/dev-* || "$BRANCH_NAME" == fix/dev-* ]]; then
+          if [[ "$BRANCH_NAME" == dev ]] || [[ "$BRANCH_NAME" == feat/dev-* ]] || [[ "$BRANCH_NAME" == fix/dev-* ]]; then
             echo "TARGET_ENV=dev" >> $GITHUB_ENV
-          elif [[ "$BRANCH_NAME" == staging || "$BRANCH_NAME" == feat/staging-* || "$BRANCH_NAME" == fix/staging-* ]]; then
+          elif [[ "$BRANCH_NAME" == staging ]] || [[ "$BRANCH_NAME" == feat/staging-* ]] || [[ "$BRANCH_NAME" == fix/staging-* ]]; then
             echo "TARGET_ENV=staging" >> $GITHUB_ENV
-          elif [[ "$BRANCH_NAME" == prod || "$BRANCH_NAME" == feat/prod-* || "$BRANCH_NAME" == fix/prod-* ]]; then
+          elif [[ "$BRANCH_NAME" == prod ]] || [[ "$BRANCH_NAME" == feat/prod-* ]] || [[ "$BRANCH_NAME" == fix/prod-* ]]; then
             echo "TARGET_ENV=prod" >> $GITHUB_ENV
           else
             echo "TARGET_ENV=ci" >> $GITHUB_ENV   # Any other branch = CI only
