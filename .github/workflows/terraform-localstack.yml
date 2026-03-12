@@ -1,0 +1,57 @@
+name: Terraform CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    services:
+      localstack:
+        image: localstack/localstack
+        ports:
+          - 4566:4566
+        env:
+          DEBUG: 1
+
+    strategy:
+      matrix:
+        stack:
+          - environments/dev/networking
+
+    env:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Install tools
+        run: |
+          pipx install terraform-local
+
+      - name: Wait for LocalStack
+        run: sleep 10
+
+      - name: Terraform Init
+        run: |
+          cd ${{ matrix.stack }}
+          tflocal init
+
+      - name: Terraform Validate
+        run: |
+          cd ${{ matrix.stack }}
+          terraform validate
+
+      - name: Terraform Plan
+        run: |
+          cd ${{ matrix.stack }}
+          tflocal plan
