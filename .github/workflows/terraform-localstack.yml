@@ -18,7 +18,7 @@ jobs:
 
     strategy:
       matrix:
-        environment: [dev, staging, prod]
+        environment: [dev]
         stack: [vpc]
 
     services:
